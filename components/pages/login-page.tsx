@@ -1,19 +1,22 @@
 "use client"
-
+ 
 import type React from "react"
-
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useAuthStore } from "@/lib/stores/authStore"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
+  const login = useAuthStore((state) => state.login)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -21,24 +24,16 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      // TODO: Integrate with Supabase Auth
       if (!email || !password) {
         setError("Email and password are required")
         return
       }
 
-      // Simulate login
-      localStorage.setItem(
-        "pos_session",
-        JSON.stringify({
-          user: { email, name: "Demo User" },
-          expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-        }),
-      )
-
-      window.location.href = "/"
-    } catch (err) {
-      setError("Login failed. Please try again.")
+      // Use the auth store to handle login
+      await login(email, password)
+      router.push("/")
+    } catch (err: any) {
+      setError(err.message || "Login failed. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -92,7 +87,7 @@ export default function LoginPage() {
               {isLoading ? "Signing in..." : "Sign In"}
             </Button>
 
-            <p className="text-xs text-center text-muted-foreground">Demo: Use any email/password to test</p>
+            <p className="text-xs text-center text-muted-foreground">Enter your credentials to access the system</p>
           </form>
         </CardContent>
       </Card>

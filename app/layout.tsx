@@ -5,6 +5,8 @@ import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 
 import { Quicksand, Geist_Mono, Geist as V0_Font_Geist, Geist_Mono as V0_Font_Geist_Mono, Source_Serif_4 as V0_Font_Source_Serif_4 } from 'next/font/google'
+import { ToasterProvider } from "@/components/providers/ToasterProvider"
+import { SettingsProvider } from "@/lib/contexts/settingsContext"
 
 // Initialize fonts
 const _geist = V0_Font_Geist({ subsets: ['latin'], weight: ["100","200","300","400","500","600","700","800","900"] })
@@ -13,9 +15,9 @@ const _sourceSerif_4 = V0_Font_Source_Serif_4({ subsets: ['latin'], weight: ["20
 
 const _quicksand = Quicksand({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"] })
 export const metadata: Metadata = {
-  title: "v0 App",
-  description: "Created with v0",
-  generator: "v0.app",
+  title: "Xalesin-POS",
+  description: "Lite-POS",
+  generator: "Xalesin",
 }
 
 export default function RootLayout({
@@ -26,7 +28,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans antialiased`}>
-        {children}
+        <SettingsProvider>
+          <ToasterProvider>
+            {children}
+          </ToasterProvider>
+        </SettingsProvider>
         <Analytics />
       </body>
     </html>

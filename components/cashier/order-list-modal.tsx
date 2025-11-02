@@ -2,7 +2,8 @@
 
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useCashierStore } from "@/lib/stores/cashierStore"
 
 interface OrderListModalProps {
   isOpen: boolean
@@ -19,16 +20,29 @@ interface Order {
 }
 
 export default function OrderListModal({ isOpen, onClose }: OrderListModalProps) {
+  const { savedOrders, initializeCashier, loadSavedOrder } = useCashierStore()
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
   const [paymentStatus, setPaymentStatus] = useState("all")
+  const [loading, setLoading] = useState(false)
 
-  const sampleOrders: Order[] = [
-    { id: "1", orderNumber: "ORD-001", date: "2024-01-15", quantity: 5, amount: 150000, status: "lunas" },
-    { id: "2", orderNumber: "ORD-002", date: "2024-01-16", quantity: 3, amount: 95000, status: "pending" },
-    { id: "3", orderNumber: "ORD-003", date: "2024-01-17", quantity: 8, amount: 240000, status: "cicilan" },
-    { id: "4", orderNumber: "ORD-004", date: "2024-01-18", quantity: 2, amount: 60000, status: "lunas" },
-  ]
+  // Load saved orders when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setLoading(true)
+      initializeCashier().finally(() => setLoading(false))
+    }
+  }, [isOpen, initializeCashier])
+
+  // Convert saved orders to display format
+  const orders: Order[] = savedOrders.map(order => ({
+    id: order.id,
+    orderNumber: order.transactionNumber,
+    date: order.savedAt ? new Date(order.savedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    quantity: order.items.reduce((sum, item) => sum + item.qty, 0),
+    amount: order.total,
+    status: order.status === 'paid' ? 'lunas' : order.status === 'saved' ? 'pending' : 'cicilan'
+  }))
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; color: string }> = {
@@ -40,12 +54,22 @@ export default function OrderListModal({ isOpen, onClose }: OrderListModalProps)
     return <span className={`px-2 py-1 rounded text-xs font-medium ${statusInfo.color}`}>{statusInfo.label}</span>
   }
 
-  const filteredOrders = sampleOrders.filter((order) => {
+  const filteredOrders = orders.filter((order) => {
     if (paymentStatus !== "all" && order.status !== paymentStatus) return false
     if (startDate && order.date < startDate) return false
     if (endDate && order.date > endDate) return false
     return true
   })
+
+  const handleLoadOrder = async (orderId: string) => {
+    try {
+      await loadSavedOrder(orderId)
+      onClose()
+    } catch (error) {
+      console.error('Failed to load saved order:', error)
+      // TODO: Show error notification
+    }
+  }
 
   if (!isOpen) return null
 
@@ -102,7 +126,14 @@ export default function OrderListModal({ isOpen, onClose }: OrderListModalProps)
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {filteredOrders.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                <p className="text-sm">Loading saved orders...</p>
+              </div>
+            </div>
+          ) : filteredOrders.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <p className="text-sm">Belum ada order tersimpan</p>
             </div>
@@ -115,6 +146,7 @@ export default function OrderListModal({ isOpen, onClose }: OrderListModalProps)
                   <th className="px-4 py-3 text-right text-xs font-semibold text-foreground">Jumlah QTY</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-foreground">Jumlah Nominal</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Status Pembayaran</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -127,6 +159,16 @@ export default function OrderListModal({ isOpen, onClose }: OrderListModalProps)
                       Rp {order.amount.toLocaleString("id-ID")}
                     </td>
                     <td className="px-4 py-3 text-sm">{getStatusBadge(order.status)}</td>
+                    <td className="px-4 py-3 text-sm text-center">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleLoadOrder(order.id)}
+                        className="text-xs"
+                      >
+                        Load
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

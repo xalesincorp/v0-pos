@@ -28,3 +28,16 @@ Continue building your app on:
 2. Deploy your chats from the v0 interface
 3. Changes are automatically pushed to this repository
 4. Vercel deploys the latest version from this repository
+
+## Troubleshooting WebSocket/HMR Issues
+
+If you encounter "failed to connect to websocket" errors during development, this may be due to network configuration or firewall settings. The following configuration has been added to `next.config.mjs` to help resolve these issues:
+
+- Added CORS headers to allow cross-origin requests
+- Configured webpack fallbacks for development environment
+- Properly configured HMR settings
+
+For additional issues, consider:
+- Checking firewall settings that might block WebSocket connections
+- Ensuring your development environment allows WebSocket connections
+- Verifying that no proxy settings interfere with WebSocket connections

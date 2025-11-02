@@ -1,176 +1,265 @@
-"use client"
+"use client";
 
-import type React from "react"
-
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { X, Trash2 } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Plus, Trash2 } from "lucide-react";
+import { useProductStore } from "@/lib/stores/productStore";
+import { useAuthStore } from "@/lib/stores/authStore";
+import { useNotificationStore } from "@/lib/stores/notificationStore";
 
 interface OpnameItem {
-  id: string
-  productId: string
-  productName: string
-  systemStock: number
-  actualStock: number
-  variance: number
+  id: string;
+  productId: string;
+  productName: string;
+  systemStock: number;
+  actualStock: number;
+  variance: number;
 }
 
-interface StockOpnameFormProps {
-  onClose: () => void
-}
+export default function StockOpnameForm({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { products, addStockOpname, fetchProducts } = useProductStore();
+  const { user } = useAuthStore();
+  const { showNotification } = useNotificationStore();
+  const [loading, setLoading] = useState(false);
+  const [opnameDate, setOpnameDate] = useState(new Date().toISOString().split('T')[0]);
+  const [notes, setNotes] = useState("");
+  const [opnameItems, setOpnameItems] = useState<OpnameItem[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [actualStock, setActualStock] = useState("");
 
-export default function StockOpnameForm({ onClose }: StockOpnameFormProps) {
-  const [items, setItems] = useState<OpnameItem[]>([
-    { id: "1", productId: "1", productName: "Bakso Sapi", systemStock: 15, actualStock: 14, variance: -1 },
-    { id: "2", productId: "2", productName: "Es Teh", systemStock: 45, actualStock: 45, variance: 0 },
-  ])
-  const [notes, setNotes] = useState("")
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
-  const handleUpdateItem = (id: string, field: string, value: any) => {
-    setItems(
-      items.map((item) => {
-        if (item.id === id) {
-          const updated = { ...item, [field]: value }
-          if (field === "actualStock") {
-            updated.variance = updated.actualStock - updated.systemStock
-          }
-          return updated
-        }
-        return item
-      }),
-    )
-  }
+  const addOpnameItem = () => {
+    if (!selectedProduct || !actualStock) {
+      showNotification({
+        type: 'low_stock',
+        title: "Error",
+        message: "Please select a product and enter actual stock",
+        data: null,
+      });
+      return;
+    }
 
-  const handleRemoveItem = (id: string) => {
-    setItems(items.filter((item) => item.id !== id))
-  }
+    const product = products.find(p => p.id === selectedProduct);
+    if (!product) return;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log("Saving opname:", { items, notes })
-    onClose()
-  }
+    const systemStock = product.currentStock || 0;
+    const variance = Number(actualStock) - systemStock;
 
-  const totalVariance = items.reduce((sum, item) => sum + item.variance, 0)
+    const item: OpnameItem = {
+      id: Date.now().toString(),
+      productId: selectedProduct,
+      productName: product.name,
+      systemStock,
+      actualStock: Number(actualStock),
+      variance,
+    };
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b border-border">
-          <CardTitle>Stock Opname</CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </Button>
-        </CardHeader>
+    // Check if item already exists
+    const exists = opnameItems.some(item => item.productId === selectedProduct);
+    if (exists) {
+      showNotification({
+        type: 'low_stock',
+        title: "Error",
+        message: "This product is already in the list",
+        data: null,
+      });
+      return;
+    }
 
-        <CardContent className="pt-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Opname Date */}
+    setOpnameItems([...opnameItems, item]);
+    setSelectedProduct("");
+    setActualStock("");
+  };
+
+  const removeOpnameItem = (id: string) => {
+    setOpnameItems(opnameItems.filter(item => item.id !== id));
+  };
+
+const handleSubmit = async () => {
+    if (opnameItems.length === 0) {
+      showNotification({
+        type: 'low_stock',
+        title: "Error",
+        message: "Tambahkan minimal satu item untuk opname",
+        data: null,
+      });
+      return;
+    }
+
+    if (!user?.id) {
+      showNotification({
+        type: 'low_stock',
+        title: "Error",
+        message: "User ID tidak ditemukan",
+        data: null,
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await addStockOpname({
+        items: opnameItems.map(item => ({
+          productId: item.productId,
+          systemStock: item.systemStock,
+          actualStock: item.actualStock,
+          variance: item.variance,
+        })),
+        notes: notes || null,
+        createdBy: user.id,
+      });
+
+      showNotification({
+        type: 'saved_order',
+        title: "Berhasil",
+        message: "Stok opname berhasil disimpan",
+        data: null,
+      });
+
+      // Reset form and close
+      setNotes("");
+      setOpnameItems([]);
+      setSelectedProduct("");
+      setActualStock("");
+      onClose();
+    } catch (error: any) {
+      showNotification({
+        type: 'low_stock',
+        title: "Error",
+        message: error.message || "Gagal menyimpan stok opname",
+        data: null,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Stok Opname Baru</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Date and Notes */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Opname Date</label>
-              <Input type="date" defaultValue={new Date().toISOString().split("T")[0]} />
-            </div>
-
-            {/* Items Table */}
-            <div className="space-y-3">
-              <h3 className="font-semibold text-foreground">Stock Items</h3>
-
-              <div className="overflow-x-auto border border-border rounded-lg">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Product</TableHead>
-                      <TableHead className="text-right">System Stock</TableHead>
-                      <TableHead className="text-right">Actual Stock</TableHead>
-                      <TableHead className="text-right">Variance</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium">{item.productName}</TableCell>
-                        <TableCell className="text-right">{item.systemStock}</TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            value={item.actualStock}
-                            onChange={(e) => handleUpdateItem(item.id, "actualStock", Number(e.target.value))}
-                            className="h-8 text-right"
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Badge
-                            className={
-                              item.variance > 0
-                                ? "bg-green-100 text-green-800"
-                                : item.variance < 0
-                                  ? "bg-red-100 text-red-800"
-                                  : "bg-gray-100 text-gray-800"
-                            }
-                          >
-                            {item.variance > 0 ? "+" : ""}
-                            {item.variance}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveItem(item.id)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </div>
-
-            {/* Summary */}
-            <div className="p-4 bg-muted rounded-lg">
-              <p className="text-sm text-muted-foreground">
-                Total Variance:{" "}
-                <span
-                  className={`font-semibold ${totalVariance > 0 ? "text-green-600" : totalVariance < 0 ? "text-red-600" : "text-foreground"}`}
-                >
-                  {totalVariance > 0 ? "+" : ""}
-                  {totalVariance}
-                </span>
-              </p>
-            </div>
-
-            {/* Notes */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Notes</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add any notes about this opname..."
-                className="w-full h-24 p-3 border border-border rounded-lg bg-background text-foreground"
+              <label className="text-sm font-medium text-foreground">Tanggal Opname</label>
+              <Input
+                type="date"
+                value={opnameDate}
+                onChange={(e) => setOpnameDate(e.target.value)}
               />
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Catatan (Opsional)</label>
+              <Input
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Catatan tambahan..."
+              />
+            </div>
+          </div>
 
-            {/* Actions */}
-            <div className="flex gap-2 justify-end pt-4 border-t border-border">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button type="submit" className="bg-primary hover:bg-primary/90">
-                Save Opname
+          {/* Add Item */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Produk</label>
+              <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih produk" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products
+                    .filter(p => !p.deletedAt && p.id && p.id.trim() !== '' && p.name && p.name.trim() !== '')
+                    .map(product => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.name} - {product.sku || 'No SKU'} (Sistem: {product.currentStock || 0})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Stok Aktual</label>
+              <Input
+                type="number"
+                value={actualStock}
+                onChange={(e) => setActualStock(e.target.value)}
+                placeholder="0"
+                min="0"
+              />
+            </div>
+            <div className="space-y-2 pb-2.5">
+              <Button type="button" onClick={addOpnameItem} className="w-full gap-2" variant="outline">
+                <Plus className="w-4 h-4" />
+                Tambah Item
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  )
+          </div>
+
+          {/* Items Table */}
+          <div className="overflow-x-auto border rounded-lg border-border">
+            <Table>
+              <TableHeader className="bg-muted/50">
+                <TableRow>
+                  <TableHead>Produk</TableHead>
+                  <TableHead className="text-right">Stok Sistem</TableHead>
+                  <TableHead className="text-right">Stok Aktual</TableHead>
+                  <TableHead className="text-right">Selisih</TableHead>
+                  <TableHead className="text-right">Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {opnameItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Belum ada item</TableCell>
+                  </TableRow>
+                ) : (
+                  opnameItems.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.productName}</TableCell>
+                      <TableCell className="text-right">{item.systemStock}</TableCell>
+                      <TableCell className="text-right">{item.actualStock}</TableCell>
+                      <TableCell className={`text-right font-medium ${item.variance > 0 ? 'text-green-600' : item.variance < 0 ? 'text-red-600' : 'text-foreground'}`}>
+                        {item.variance > 0 ? '+' : ''}{item.variance}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => removeOpnameItem(item.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Submit Button */}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+              Batal
+            </Button>
+            <Button onClick={handleSubmit} disabled={loading || opnameItems.length === 0} className="gap-2">
+              {loading ? "Menyimpan..." : "Simpan Opname"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }

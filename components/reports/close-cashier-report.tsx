@@ -1,31 +1,107 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { AlertCircle } from "lucide-react"
+import { useShiftStore } from "@/lib/stores/shiftStore";
+import { ReportService } from "@/lib/services/reportService";
+import { ExportService } from "@/lib/services/exportService";
+import { useAuthStore } from "@/lib/stores/authStore";
+import { toast } from "react-hot-toast";
 
 export default function CloseCashierReport() {
-  const [actualCash, setActualCash] = useState("")
-  const [notes, setNotes] = useState("")
+  const [actualCash, setActualCash] = useState("");
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [shiftData, setShiftData] = useState<any>(null);
+  const [summary, setSummary] = useState({
+    openingBalance: 0,
+    totalCash: 0,
+    totalNonCash: 0,
+    totalSales: 0,
+    expectedCash: 0
+  });
+  const { user } = useAuthStore();
 
-  // Mock data
-  const openingBalance = 500000
-  const totalCash = 2850000
-  const totalNonCash = 1200000
-  const totalSales = 4050000
-  const expectedCash = openingBalance + totalCash
+  // Fetch current shift data
+  useEffect(() => {
+    const fetchShiftData = async () => {
+      setLoading(true);
+      try {
+        // Use the shift store to get current shift status
+        await useShiftStore.getState().checkShiftStatus(user?.id || "");
+        const currentShift = await useShiftStore.getState().getCurrentShift();
+        if (currentShift) {
+          const report = await ReportService.getCloseCashierReport(currentShift.id);
+          setShiftData(report.shift);
+          setSummary(report.summary);
+        } else {
+          toast.error("No active shift found");
+        }
+      } catch (error) {
+        console.error("Error fetching shift data:", error);
+        toast.error("Failed to load shift data");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const variance = actualCash ? Number(actualCash) - expectedCash : 0
-  const variancePercent = actualCash ? ((variance / expectedCash) * 100).toFixed(2) : 0
+    if (user?.id) {
+      fetchShiftData();
+    }
+  }, [user?.id]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log("Closing cashier:", { actualCash, notes, variance })
-  }
+ const expectedCash = summary.openingBalance + summary.totalCash;
+  const variance = actualCash ? Number(actualCash) - expectedCash : 0;
+  const variancePercent = actualCash ? ((variance / expectedCash) * 10).toFixed(2) : 0;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      // Close the shift with actual cash
+      if (shiftData) {
+        await useShiftStore.getState().closeShift(shiftData.id, Number(actualCash));
+        toast.success("Cashier closed successfully");
+        
+        // After successfully closing cashier, log out the user
+        try {
+          await useAuthStore.getState().logout();
+          window.location.href = "/";
+        } catch (logoutError) {
+          console.error('Logout error after closing cashier:', logoutError);
+          // Even if logout fails, redirect to login page
+          window.location.href = "/";
+        }
+      }
+    } catch (error) {
+      console.error("Error closing cashier:", error);
+      toast.error("Failed to close cashier");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = async (format: 'excel' | 'pdf') => {
+    try {
+      if (shiftData && actualCash) {
+        if (format === 'excel') {
+          await ExportService.exportCloseCashierReportToExcel(shiftData, summary, Number(actualCash));
+        } else {
+          await ExportService.exportCloseCashierReportToPDF(shiftData, summary, Number(actualCash));
+        }
+        toast.success(`Close cashier report exported as ${format.toUpperCase()} successfully`);
+      } else {
+        toast.error("Please enter actual cash amount to export report");
+      }
+    } catch (error) {
+      console.error(`Error exporting close cashier report as ${format}:`, error);
+      toast.error(`Failed to export close cashier report as ${format}`);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -33,22 +109,22 @@ export default function CloseCashierReport() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4">
           <p className="text-sm text-muted-foreground mb-1">Opening Balance</p>
-          <p className="text-2xl font-bold text-foreground">Rp {openingBalance.toLocaleString("id-ID")}</p>
+          <p className="text-2xl font-bold text-foreground">Rp {summary.openingBalance.toLocaleString("id-ID")}</p>
         </Card>
 
         <Card className="p-4">
           <p className="text-sm text-muted-foreground mb-1">Total Cash Sales</p>
-          <p className="text-2xl font-bold text-primary">Rp {totalCash.toLocaleString("id-ID")}</p>
+          <p className="text-2xl font-bold text-primary">Rp {summary.totalCash.toLocaleString("id-ID")}</p>
         </Card>
 
         <Card className="p-4">
           <p className="text-sm text-muted-foreground mb-1">Total Non-Cash</p>
-          <p className="text-2xl font-bold text-foreground">Rp {totalNonCash.toLocaleString("id-ID")}</p>
+          <p className="text-2xl font-bold text-foreground">Rp {summary.totalNonCash.toLocaleString("id-ID")}</p>
         </Card>
 
         <Card className="p-4">
           <p className="text-sm text-muted-foreground mb-1">Total Sales</p>
-          <p className="text-2xl font-bold text-foreground">Rp {totalSales.toLocaleString("id-ID")}</p>
+          <p className="text-2xl font-bold text-foreground">Rp {summary.totalSales.toLocaleString("id-ID")}</p>
         </Card>
       </div>
 
@@ -70,6 +146,7 @@ export default function CloseCashierReport() {
                 onChange={(e) => setActualCash(e.target.value)}
                 placeholder="Enter actual cash amount"
                 required
+                disabled={loading}
               />
             </div>
           </div>
@@ -102,16 +179,23 @@ export default function CloseCashierReport() {
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add any notes about this close cashier..."
               className="w-full h-24 p-3 border border-border rounded-lg bg-background text-foreground"
+              disabled={loading}
             />
           </div>
 
           {/* Actions */}
-          <div className="flex gap-2 justify-end pt-4 border-t border-border">
-            <Button type="button" variant="outline">
+          <div className="flex flex-col sm:flex-row gap-2 justify-end pt-4 border-t border-border">
+            <Button type="button" variant="outline" onClick={() => handleExport('pdf')} disabled={loading}>
+              Export PDF
+            </Button>
+            <Button type="button" variant="outline" onClick={() => handleExport('excel')} disabled={loading}>
+              Export Excel
+            </Button>
+            <Button type="button" variant="outline" disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={!actualCash}>
-              Close Cashier
+            <Button type="submit" className="bg-primary hover:bg-primary/90" disabled={loading || !actualCash}>
+              {loading ? "Processing..." : "Close Cashier"}
             </Button>
           </div>
         </form>

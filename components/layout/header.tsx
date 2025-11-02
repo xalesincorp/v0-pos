@@ -11,14 +11,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useAuthStore } from "@/lib/stores/authStore"
+import { useNotificationStore } from "@/lib/services/notificationService"
 
 export default function Header() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
+  const { unreadCount } = useNotificationStore()
 
-  const handleLogout = () => {
-    localStorage.removeItem("pos_session")
-    window.location.href = "/"
+  const handleLogout = async () => {
+    try {
+      await useAuthStore.getState().logout();
+      window.location.href = "/";
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Even if logout fails, clear local session
+      window.location.href = "/";
+    }
   }
 
   const handleLockScreen = () => {
@@ -52,7 +61,11 @@ export default function Header() {
             className="relative"
           >
             <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-xs text-white">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </Button>
           {showNotifications && <NotificationPanel />}
         </div>

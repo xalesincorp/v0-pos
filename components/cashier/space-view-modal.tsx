@@ -224,7 +224,7 @@ export default function SpaceViewModal({ isOpen, onClose }: SpaceViewModalProps)
         >
           {currentShapes.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
-              <p>Tidak ada layout. Klik "+Tambah Layout" untuk menambahkan.</p>
+              <p className="text-muted-foreground opacity-50">Fitur Space Layout sedang dalam Tahap Perkembangan</p>
             </div>
           ) : (
             <div className="relative w-full h-full">

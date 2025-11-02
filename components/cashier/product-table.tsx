@@ -26,8 +26,8 @@ export default function ProductTable({ products }: ProductTableProps) {
   }
 
   const handleAddToCart = (product: Product) => {
-    // TODO: Add to cart logic
-    console.log("Add to cart:", product)
+    // TODO: Add to cart logic - integrate with cashierStore
+    console.log("Add to cart:", product.id)
   }
 
   return (

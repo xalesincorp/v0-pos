@@ -1,124 +1,169 @@
-"use client"
+"use client";
+import React, { useState, useEffect } from "react";
+import { Bell, X, CheckCircle, AlertTriangle, Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { 
+  useNotificationStore 
+} from "@/lib/stores/notificationStore";
 
-import { useState } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import NotificationItem from "./notification-item"
-
-interface Notification {
-  id: string
-  type: "low_stock" | "unpaid" | "saved_order"
-  title: string
-  message: string
-  timestamp: string
-  read: boolean
+interface NotificationCenterProps {
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-const mockNotifications: Notification[] = [
-  {
-    id: "1",
-    type: "low_stock",
-    title: "Low Stock Alert",
-    message: "Daging Sapi: 200gr left",
-    timestamp: "5 mins ago",
-    read: false,
-  },
-  {
-    id: "2",
-    type: "unpaid",
-    title: "Unpaid Transactions",
-    message: "3 transactions pending payment",
-    timestamp: "2 hours ago",
-    read: false,
-  },
-  {
-    id: "3",
-    type: "saved_order",
-    title: "Saved Orders",
-    message: "2 orders waiting to be completed",
-    timestamp: "1 day ago",
-    read: true,
-  },
-]
+export default function NotificationCenter({ isOpen, onClose }: NotificationCenterProps) {
+  const { notifications, unreadCount, initializeNotifications, markAsRead, deleteNotification } = useNotificationStore();
+  const [loading, setLoading] = useState(false);
 
-export default function NotificationCenter() {
-  const [notifications, setNotifications] = useState(mockNotifications)
+  // Initialize notifications on mount
+  useEffect(() => {
+    const initNotifications = async () => {
+      try {
+        await initializeNotifications();
+      } catch (error) {
+        console.error("Failed to initialize notifications:", error);
+      }
+    };
 
-  const unreadCount = notifications.filter((n) => !n.read).length
-  const unreadNotifications = notifications.filter((n) => !n.read)
-  const readNotifications = notifications.filter((n) => n.read)
+    if (isOpen) {
+      initNotifications();
+    }
+  }, [isOpen, initializeNotifications]);
 
-  const handleDismiss = (id: string) => {
-    setNotifications(notifications.filter((n) => n.id !== id))
-  }
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await markAsRead(id);
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error);
+    }
+  };
 
-  const handleMarkAsRead = (id: string) => {
-    setNotifications(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)))
-  }
+  const handleMarkAllAsRead = async () => {
+    setLoading(true);
+    try {
+      // Mark all notifications as read
+      for (const notification of notifications) {
+        if (!notification.read) {
+          await markAsRead(notification.id);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleClearAll = () => {
-    setNotifications([])
+  const handleDeleteNotification = async (id: string) => {
+    try {
+      await deleteNotification(id);
+    } catch (error) {
+      console.error("Failed to delete notification:", error);
+    }
+  };
+
+  if (!isOpen) {
+    return null;
   }
 
   return (
-    <Card className="w-full max-w-2xl">
-      <div className="p-4 border-b border-border flex items-center justify-between">
-        <h3 className="font-semibold text-foreground">
-          Notifications{" "}
-          {unreadCount > 0 && (
-            <span className="text-xs bg-destructive text-destructive-foreground rounded-full px-2 py-1 ml-2">
-              {unreadCount}
-            </span>
-          )}
-        </h3>
-        {notifications.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={handleClearAll} className="text-xs">
-            Clear All
-          </Button>
-        )}
-      </div>
-
-      {notifications.length === 0 ? (
-        <div className="p-8 text-center">
-          <p className="text-muted-foreground">No notifications</p>
-        </div>
-      ) : (
-        <Tabs defaultValue="unread" className="w-full">
-          <TabsList className="w-full justify-start border-b border-border rounded-none bg-transparent p-0">
-            <TabsTrigger
-              value="unread"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
-            >
-              Unread ({unreadCount})
-            </TabsTrigger>
-            <TabsTrigger
-              value="all"
-              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
-            >
-              All ({notifications.length})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="unread" className="mt-0">
-            {unreadNotifications.length === 0 ? (
-              <div className="p-8 text-center">
-                <p className="text-muted-foreground">No unread notifications</p>
-              </div>
-            ) : (
-              unreadNotifications.map((notification) => (
-                <NotificationItem key={notification.id} {...notification} onDismiss={handleDismiss} />
-              ))
+    <div className="fixed inset-0 z-50 flex items-end justify-end p-4 sm:items-start sm:justify-end">
+      <div 
+        className="fixed inset-0 bg-black/50" 
+        onClick={onClose}
+      />
+      
+      <div className="relative w-full max-w-md rounded-lg border bg-background shadow-lg">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b p-4">
+          <div className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            <h3 className="font-semibold">Notifications</h3>
+            {unreadCount > 0 && (
+              <span className="ml-2 rounded-full bg-primary px-2 py-1 text-xs text-primary-foreground">
+                {unreadCount}
+              </span>
             )}
-          </TabsContent>
-
-          <TabsContent value="all" className="mt-0">
-            {notifications.map((notification) => (
-              <NotificationItem key={notification.id} {...notification} onDismiss={handleDismiss} />
-            ))}
-          </TabsContent>
-        </Tabs>
-      )}
-    </Card>
-  )
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 px-2 text-xs"
+                onClick={handleMarkAllAsRead}
+                disabled={loading}
+              >
+                {loading ? 'Marking...' : 'Mark all as read'}
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        
+        {/* Notifications List */}
+        <div className="max-h-96 overflow-y-auto">
+          {notifications.length === 0 ? (
+            <div className="p-4 text-center text-sm text-muted-foreground">
+              No notifications
+            </div>
+          ) : (
+            <ul className="divide-y">
+              {notifications.map((notification) => (
+                <li 
+                  key={notification.id} 
+                  className={`p-4 ${!notification.read ? 'bg-muted' : ''}`}
+                >
+                  <div className="flex justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-medium">{notification.title}</h4>
+                        {!notification.read && (
+                          <span className="h-2 w-2 rounded-full bg-blue-500"></span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {notification.message}
+                      </p>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {new Date(notification.createdAt).toLocaleTimeString()}
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      {!notification.read && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => handleMarkAsRead(notification.id)}
+                        >
+                          <CheckCircle className="h-3 w-3" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => handleDeleteNotification(notification.id)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }

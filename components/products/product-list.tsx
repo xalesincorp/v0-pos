@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,71 +8,24 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Edit, Trash2, Search } from "lucide-react"
-
-interface Product {
-  id: string
-  name: string
-  sku: string
-  category: string
-  type: "finish_goods" | "recipe_goods" | "raw_material"
-  price: number
-  cost: number
-  stock: number
-  image: string
-}
-
-const mockProducts: Product[] = [
-  {
-    id: "1",
-    name: "Bakso Sapi",
-    sku: "BSP-001",
-    category: "Food",
-    type: "finish_goods",
-    price: 25000,
-    cost: 12000,
-    stock: 15,
-    image: "/placeholder.svg?height=50&width=50",
-  },
-  {
-    id: "2",
-    name: "Daging Sapi",
-    sku: "DSP-001",
-    category: "Raw Material",
-    type: "raw_material",
-    price: 80000,
-    cost: 75000,
-    stock: 5000,
-    image: "/placeholder.svg?height=50&width=50",
-  },
-  {
-    id: "3",
-    name: "Es Teh",
-    sku: "EST-001",
-    category: "Beverage",
-    type: "finish_goods",
-    price: 5000,
-    cost: 2000,
-    stock: 45,
-    image: "/placeholder.svg?height=50&width=50",
-  },
-]
+import { useProductStore } from "@/lib/stores/productStore"
+import { Product as ProductType } from "@/lib/db"
+import { useNotificationStore } from "@/lib/stores/notificationStore"
 
 interface ProductListProps {
-  onEdit: (product: Product) => void
+  onEdit: (product: ProductType) => void
 }
 
 export default function ProductList({ onEdit }: ProductListProps) {
+  const { products, loading, searchProducts, deleteProduct, fetchProducts } = useProductStore()
+  const { showNotification } = useNotificationStore()
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
 
-  const filteredProducts = mockProducts.filter((product) => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = !selectedCategory || product.category === selectedCategory
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
-    return matchesSearch && matchesCategory
-  })
+  const filteredProducts = searchProducts(searchQuery)
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -93,6 +46,27 @@ export default function ProductList({ onEdit }: ProductListProps) {
     return "text-red-600"
   }
 
+  const handleDelete = async (product: ProductType) => {
+    if (window.confirm(`Are you sure you want to delete product "${product.name}"?`)) {
+      try {
+        await deleteProduct(product.id);
+        showNotification({
+          type: 'saved_order',
+          title: "Success",
+          message: "Product deleted successfully",
+          data: null,
+        });
+      } catch (error: any) {
+        showNotification({
+          type: 'low_stock',
+          title: "Error",
+          message: error.message || "Failed to delete product",
+          data: null,
+        });
+      }
+    }
+  }
+
   return (
     <Card className="p-0 border-0">
       {/* Search */}
@@ -101,7 +75,7 @@ export default function ProductList({ onEdit }: ProductListProps) {
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name or SKU..."
+              placeholder="Cari berdasarkan nama atau SKU..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 h-8 text-sm"
@@ -114,80 +88,85 @@ export default function ProductList({ onEdit }: ProductListProps) {
         <Table>
           <TableHeader className="bg-muted/50 sticky top-0">
             <TableRow className="hover:bg-transparent border-b border-border">
-              <TableHead className="h-8 px-3 py-1 text-xs font-semibold">Product</TableHead>
+              <TableHead className="h-8 px-3 py-1 text-xs font-semibold">Produk</TableHead>
               <TableHead className="h-8 px-3 py-1 text-xs font-semibold">SKU</TableHead>
-              <TableHead className="h-8 px-3 py-1 text-xs font-semibold">Type</TableHead>
-              <TableHead className="h-8 px-3 py-1 text-xs font-semibold text-right">Price</TableHead>
-              <TableHead className="h-8 px-3 py-1 text-xs font-semibold text-right">Cost</TableHead>
-              <TableHead className="h-8 px-3 py-1 text-xs font-semibold text-right">Stock</TableHead>
-              <TableHead className="h-8 px-3 py-1 text-xs font-semibold text-right">Actions</TableHead>
+              <TableHead className="h-8 px-3 py-1 text-xs font-semibold">Tipe</TableHead>
+              <TableHead className="h-8 px-3 py-1 text-xs font-semibold text-right">Harga</TableHead>
+              <TableHead className="h-8 px-3 py-1 text-xs font-semibold text-right">Modal</TableHead>
+              <TableHead className="h-8 px-3 py-1 text-xs font-semibold text-right">Stok</TableHead>
+              <TableHead className="h-8 px-3 py-1 text-xs font-semibold text-right">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredProducts.map((product) => (
-              <TableRow key={product.id} className="hover:bg-muted/30 border-b border-border/50 h-12">
-                <TableCell className="px-3 py-1">
-                  <div className="flex items-center gap-2">
-                    <div className="relative w-8 h-8 rounded-md overflow-hidden bg-muted flex-shrink-0">
-                      <Image
-                        src={product.image || "/placeholder.svg"}
-                        alt={product.name}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm text-foreground truncate">{product.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{product.category}</p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="px-3 py-1 text-xs text-muted-foreground">{product.sku}</TableCell>
-                <TableCell className="px-3 py-1">
-                  <Badge variant="outline" className="text-xs py-0 px-1.5 h-5">
-                    {product.type.replace(/_/g, " ")}
-                  </Badge>
-                </TableCell>
-                <TableCell className="px-3 py-1 text-right font-medium text-sm">
-                  Rp {product.price.toLocaleString("id-ID")}
-                </TableCell>
-                <TableCell className="px-3 py-1 text-right text-xs text-muted-foreground">
-                  Rp {product.cost.toLocaleString("id-ID")}
-                </TableCell>
-                <TableCell className={`px-3 py-1 text-right font-semibold text-sm ${getStockColor(product.stock)}`}>
-                  {product.stock}
-                </TableCell>
-                <TableCell className="px-3 py-1 text-right">
-                  <div className="flex justify-end gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => onEdit(product)}
-                      className="h-7 px-2 gap-1 text-xs"
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </TableCell>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Loading...</TableCell>
               </TableRow>
-            ))}
+            ) : filteredProducts.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No products found</TableCell>
+              </TableRow>
+            ) : (
+              filteredProducts.map((product) => (
+                <TableRow key={product.id} className="hover:bg-muted/30 border-b border-border/50 h-12">
+                  <TableCell className="px-3 py-1">
+                    <div className="flex items-center gap-2">
+                      <div className="relative w-8 h-8 rounded-md overflow-hidden bg-muted flex-shrink-0">
+                        <Image
+                          src={product.image || "/placeholder.svg"}
+                          alt={product.name}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm text-foreground truncate">{product.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{product.categoryId}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-3 py-1 text-xs text-muted-foreground">{product.sku || '-'}</TableCell>
+                  <TableCell className="px-3 py-1">
+                    <Badge variant="outline" className="text-xs py-0 px-1.5 h-5">
+                      {product.type.replace(/_/g, " ")}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-3 py-1 text-right font-medium text-sm">
+                    Rp {product.price.toLocaleString("id-ID")}
+                  </TableCell>
+                  <TableCell className="px-3 py-1 text-right text-xs text-muted-foreground">
+                    Rp {product.cost.toLocaleString("id-ID")}
+                  </TableCell>
+                  <TableCell className={`px-3 py-1 text-right font-semibold text-sm ${getStockColor(product.currentStock)}`}>
+                    {product.currentStock}
+                  </TableCell>
+                  <TableCell className="px-3 py-1 text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onEdit(product)}
+                        className="h-7 px-2 gap-1 text-xs"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleDelete(product)}
+                        className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
-
-      {filteredProducts.length === 0 && (
-        <div className="text-center py-8">
-          <p className="text-muted-foreground">No products found</p>
-        </div>
-      )}
     </Card>
   )
 }
