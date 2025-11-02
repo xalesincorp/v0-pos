@@ -193,6 +193,35 @@ export interface Notification {
   createdAt: Date;
 }
 
+export interface StockReturn {
+  id: string;
+  returnNumber: string; // Auto-generated: RT-{YYYYMMDD}-{sequence}
+  supplierId: string; // suppliers.id
+  originalInvoiceId: string; // invoices.id
+  returnDate: Date; // When return was processed
+  confirmationDate?: Date | null; // When supplier confirmed - nullable
+  totalAmount: number; // Total return value
+  confirmedAmount?: number | null; // Confirmed amount - nullable, can differ from total
+  status: 'belum_selesai' | 'selesai'; // Return status
+  notes?: string | null; // Return notes
+  shiftId?: string | null; // cashierShifts.id - optional for shift tracking
+  createdBy: string; // user.id
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null; // Soft delete
+}
+
+export interface StockReturnItem {
+  id: string;
+  stockReturnId: string; // stock_returns.id
+  productId: string; // products.id
+  quantity: number; // Qty being returned
+  unitPrice: number; // Price per unit from original invoice
+  totalPrice: number; // quantity × unit_price
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // Main Dexie database class
 export class POSDatabase extends Dexie {
   users!: Table<User>;
@@ -205,6 +234,8 @@ export class POSDatabase extends Dexie {
   customers!: Table<Customer>;
   transactions!: Table<Transaction>;
   cashierShifts!: Table<CashierShift>;
+  stockReturns!: Table<StockReturn>;
+  stockReturnItems!: Table<StockReturnItem>;
   settings!: Table<Setting>;
   notifications!: Table<Notification>;
 
@@ -249,6 +280,24 @@ export class POSDatabase extends Dexie {
           obj.updatedBy = 'system';
         }
       });
+    });
+
+    // Add stock returns tables in version 7
+    this.version(7).stores({
+      users: 'id, email, role, createdAt, updatedAt, deletedAt',
+      categories: 'id, name, createdBy, createdAt, updatedAt, deletedAt',
+      products: 'id, name, type, categoryId, sku, createdBy, createdAt, updatedAt, deletedAt',
+      suppliers: 'id, name, phone, createdBy, createdAt, updatedAt, deletedAt',
+      invoices: 'id, invoiceNumber, supplierId, createdBy, createdAt, updatedAt, deletedAt, shiftId, paymentStatus',
+      stockOpnames: 'id, createdBy, createdAt, shiftId',
+      stockWastes: 'id, productId, createdBy, createdAt, shiftId',
+      customers: 'id, name, phone, createdBy, createdAt, updatedAt, deletedAt',
+      transactions: 'id, transactionNumber, customerId, status, createdBy, createdAt, updatedAt, deletedAt, shiftId',
+      cashierShifts: 'id, openedBy, closedBy, openedAt, closedAt, status',
+      stockReturns: 'id, returnNumber, supplierId, originalInvoiceId, status, createdAt, updatedAt, deletedAt',
+      stockReturnItems: 'id, stockReturnId, productId, createdAt',
+      settings: 'id, key, updatedAt',
+      notifications: 'id, type, read, createdAt'
     });
 
     // Create indexes for soft deletes

@@ -1,54 +1,95 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "../ui/checkbox";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, X } from "lucide-react";
-import { useProductStore } from "@/lib/stores/productStore";
-import { Product } from "@/lib/db";
+import { Search, X, Package } from "lucide-react";
+import { db, Product, Invoice } from "@/lib/db";
 
 interface ProductSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectProducts: (products: Product[]) => void;
-}
-
-interface SelectedProduct extends Product {
-  quantity: number;
-  unitPrice: number;
+  invoiceId?: string;
 }
 
 export default function ProductSelectionModal({
   isOpen,
   onClose,
   onSelectProducts,
+  invoiceId
 }: ProductSelectionModalProps) {
-  const { products } = useProductStore();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"finish_goods" | "raw_material">("finish_goods");
+  const [loading, setLoading] = useState(true);
 
-  // Filter products based on type and search query
- const filteredProducts = useMemo(() => {
-    return products.filter(product => {
-      // Filter by type based on active tab
-      const isCorrectType = activeTab === "finish_goods" 
-        ? product.type === "finish_goods" 
-        : product.type === "raw_material";
+  // Fetch products from invoice items if invoiceId is provided
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
       
-      // Filter by search query
+      if (invoiceId) {
+        // Get products from the invoice
+        const invoice = await db.invoices.get(invoiceId);
+        if (invoice) {
+          setInvoiceItems(invoice.items);
+          
+          // Get product details for each invoice item
+          const invoiceProducts: Product[] = [];
+          for (const item of invoice.items) {
+            const product = await db.products.get(item.productId);
+            if (product && !product.deletedAt) {
+              invoiceProducts.push(product);
+            }
+          }
+          setProducts(invoiceProducts);
+        }
+      } else {
+        // Get all products if no invoiceId provided
+        const allProducts = await db.products.filter(product => !product.deletedAt).toArray();
+        setProducts(allProducts);
+        setInvoiceItems([]);
+      }
+    } catch (error) {
+      console.error("Error fetching products:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchProducts();
+    }
+  }, [isOpen, invoiceId]);
+
+  // Filter products based on search query
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
       const matchesSearch = !searchQuery || 
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (product.sku && product.sku.toLowerCase().includes(searchQuery.toLowerCase()));
       
-      // Only show non-deleted products
-      return isCorrectType && !product.deletedAt && matchesSearch;
+      return matchesSearch;
     });
-  }, [products, activeTab, searchQuery]);
+  }, [products, searchQuery]);
+
+  // Get invoice quantity for a product
+  const getInvoiceQuantity = (productId: string) => {
+    const invoiceItem = invoiceItems.find(item => item.productId === productId);
+    return invoiceItem ? invoiceItem.qty : 0;
+  };
+
+  // Get invoice unit price for a product
+  const getInvoiceUnitPrice = (productId: string) => {
+    const invoiceItem = invoiceItems.find(item => item.productId === productId);
+    return invoiceItem ? invoiceItem.unitPrice : 0;
+  };
 
   // Handle product selection
   const toggleProductSelection = (productId: string) => {
@@ -61,7 +102,7 @@ export default function ProductSelectionModal({
     setSelectedProductIds(newSelected);
   };
 
- // Handle select all
+  // Handle select all
   const toggleSelectAll = () => {
     if (selectedProductIds.size === filteredProducts.length) {
       setSelectedProductIds(new Set());
@@ -71,7 +112,7 @@ export default function ProductSelectionModal({
   };
 
   // Handle confirm selection
- const handleConfirmSelection = () => {
+  const handleConfirmSelection = () => {
     const selectedProducts = products.filter(p => 
       selectedProductIds.has(p.id) && !p.deletedAt
     );
@@ -86,7 +127,14 @@ export default function ProductSelectionModal({
       <Card className="w-full max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
         <CardHeader className="p-4 border-b">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Pilih Produk</CardTitle>
+            <div>
+              <CardTitle className="text-lg">
+                {invoiceId ? "Pilih Produk dari Faktur" : "Pilih Produk"}
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                {invoiceId ? "Produk yang tersedia dalam faktur" : "Pilih produk untuk diretur"}
+              </p>
+            </div>
             <Button 
               variant="ghost" 
               size="sm" 
@@ -99,21 +147,11 @@ export default function ProductSelectionModal({
         </CardHeader>
         
         <CardContent className="p-4 flex-1 overflow-auto">
-          {/* Tabs for product type */}
-          <div className="mb-4">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="finish_goods">Finish Goods</TabsTrigger>
-                <TabsTrigger value="raw_material">Bahan Baku</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
           {/* Search */}
           <div className="relative mb-4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search products by name or SKU..."
+              placeholder="Cari produk berdasarkan nama atau SKU..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -133,21 +171,34 @@ export default function ProductSelectionModal({
                   </TableHead>
                   <TableHead>Nama Produk</TableHead>
                   <TableHead>SKU</TableHead>
-                  <TableHead>Stok Saat Ini</TableHead>
+                  {invoiceId ? (
+                    <>
+                      <TableHead className="text-right">Qty Faktur</TableHead>
+                      <TableHead className="text-right">Harga/Unit</TableHead>
+                    </>
+                  ) : (
+                    <TableHead className="text-right">Stok Saat Ini</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProducts.length === 0 ? (
+                {loading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                      Tidak menemukan produk
+                    <TableCell colSpan={invoiceId ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                      Loading...
+                    </TableCell>
+                  </TableRow>
+                ) : filteredProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={invoiceId ? 6 : 5} className="text-center py-8 text-muted-foreground">
+                      {products.length === 0 ? "Tidak ada produk tersedia" : "Tidak ada produk yang ditemukan"}
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredProducts.map((product) => (
                     <TableRow 
                       key={product.id} 
-                      className={selectedProductIds.has(product.id) ? "bg-muted/30" : ""}
+                      className={selectedProductIds.has(product.id) ? "bg-muted/30" : "hover:bg-muted/50"}
                     >
                       <TableCell>
                         <Checkbox
@@ -155,9 +206,27 @@ export default function ProductSelectionModal({
                           onCheckedChange={() => toggleProductSelection(product.id)}
                         />
                       </TableCell>
-                      <TableCell className="font-medium">{product.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          <Package className="w-4 h-4 text-muted-foreground" />
+                          {product.name}
+                        </div>
+                      </TableCell>
                       <TableCell>{product.sku || "-"}</TableCell>
-                      <TableCell>{product.currentStock || 0}</TableCell>
+                      {invoiceId ? (
+                        <>
+                          <TableCell className="text-right">
+                            <span className="font-medium">{getInvoiceQuantity(product.id)}</span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            Rp {getInvoiceUnitPrice(product.id).toLocaleString('id-ID')}
+                          </TableCell>
+                        </>
+                      ) : (
+                        <TableCell className="text-right">
+                          {product.currentStock || 0}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}
@@ -166,16 +235,21 @@ export default function ProductSelectionModal({
           </div>
 
           {/* Action buttons */}
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleConfirmSelection}
-              disabled={selectedProductIds.size === 0}
-            >
-              Pilih ({selectedProductIds.size})
-            </Button>
+          <div className="flex justify-between items-center mt-4">
+            <div className="text-sm text-muted-foreground">
+              {selectedProductIds.size} produk dipilih
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose}>
+                Tutup
+              </Button>
+              <Button 
+                onClick={handleConfirmSelection}
+                disabled={selectedProductIds.size === 0}
+              >
+                Pilih ({selectedProductIds.size})
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

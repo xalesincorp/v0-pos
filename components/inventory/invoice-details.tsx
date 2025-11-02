@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Eye, Edit, Trash2, Search, RefreshCw, Plus } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Eye, Edit, Trash2, Search, RefreshCw, Plus, MoreHorizontal } from "lucide-react";
 import { useProductStore } from "@/lib/stores/productStore";
 import { useNotificationStore } from "@/lib/stores/notificationStore";
 import { Invoice } from "@/lib/db";
+import UpdatePaymentModal from "./update-payment-modal";
 
 interface InvoiceDetailsProps {
   onNewInvoiceClick?: () => void;
@@ -21,6 +23,8 @@ export default function InvoiceDetails({ onNewInvoiceClick }: InvoiceDetailsProp
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [invoiceForPayment, setInvoiceForPayment] = useState<Invoice | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
   // Fetch data when component becomes visible (when invoices tab is active)
@@ -99,6 +103,12 @@ export default function InvoiceDetails({ onNewInvoiceClick }: InvoiceDetailsProp
   // Refresh invoice data
   const refreshInvoices = () => {
     fetchInvoices();
+  };
+
+  // Handle edit invoice (payment update)
+  const handleEditInvoice = (invoice: Invoice) => {
+    setInvoiceForPayment(invoice);
+    setShowPaymentModal(true);
   };
 
   // Handle delete invoice (soft delete)
@@ -218,30 +228,33 @@ export default function InvoiceDetails({ onNewInvoiceClick }: InvoiceDetailsProp
                       </TableCell>
                       <TableCell>{getPaymentMethodDisplay(invoice.paymentMethod, invoice.paymentType)}</TableCell>
                       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleViewInvoice(invoice)}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {/* Handle edit */}}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDeleteInvoice(invoice)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <span className="sr-only">Open menu</span>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleViewInvoice(invoice)}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View
+                            </DropdownMenuItem>
+                            {invoice.paidAmount < invoice.total && (
+                              <DropdownMenuItem onClick={() => handleEditInvoice(invoice)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteInvoice(invoice)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))
@@ -350,6 +363,18 @@ export default function InvoiceDetails({ onNewInvoiceClick }: InvoiceDetailsProp
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Payment Update Modal */}
+      <UpdatePaymentModal
+        invoice={invoiceForPayment}
+        isOpen={showPaymentModal}
+        onClose={() => {
+          setShowPaymentModal(false);
+          setInvoiceForPayment(null);
+          // Refresh invoices after payment update
+          refreshInvoices();
+        }}
+      />
     </>
   );
 }

@@ -113,6 +113,7 @@ export default function StockMovementTracker() {
     { value: "sale", label: "Penjualan" },
     { value: "opname", label: "Stok Opname" },
     { value: "waste", label: "Buang Stok" },
+    { value: "return", label: "Retur Stok" },
     { value: "adjustment", label: "Penyesuaian" }
   ];
 
@@ -126,6 +127,8 @@ export default function StockMovementTracker() {
         return <Minus className="w-4 h-4 text-blue-600" />;
       case 'waste':
         return <TrendingDown className="w-4 h-4 text-orange-600" />;
+      case 'return':
+        return <TrendingDown className="w-4 h-4 text-purple-600" />;
       default:
         return <Minus className="w-4 h-4 text-gray-600" />;
     }
@@ -141,6 +144,8 @@ export default function StockMovementTracker() {
         return "Stok Opname";
       case 'waste':
         return "Buang Stok";
+      case 'return':
+        return "Retur Stok";
       case 'adjustment':
         return "Penyesuaian";
       default:
@@ -158,6 +163,8 @@ export default function StockMovementTracker() {
         return "Stok Opname";
       case 'waste':
         return "Buang Stok";
+      case 'stock_return':
+        return "Retur Stok";
       default:
         return referenceType;
     }
@@ -179,6 +186,9 @@ export default function StockMovementTracker() {
     const totalWasteValue = filteredMovements
       .filter(m => m.type === 'waste')
       .reduce((sum, m) => sum + m.totalValue, 0);
+    const totalReturnValue = filteredMovements
+      .filter(m => m.type === 'return')
+      .reduce((sum, m) => sum + m.totalValue, 0);
     const netStockChange = filteredMovements.reduce((sum, m) => sum + m.quantity, 0);
 
     return {
@@ -186,6 +196,7 @@ export default function StockMovementTracker() {
       totalPurchaseValue,
       totalSaleValue,
       totalWasteValue,
+      totalReturnValue,
       netStockChange
     };
   };
@@ -290,7 +301,7 @@ export default function StockMovementTracker() {
       </Card>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-primary">{summary.totalMovements}</div>
@@ -319,6 +330,14 @@ export default function StockMovementTracker() {
               {Math.round(summary.totalWasteValue).toLocaleString('id-ID')}
             </div>
             <p className="text-sm text-muted-foreground">Nilai Buang (Rp)</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-purple-600">
+              {Math.round(summary.totalReturnValue).toLocaleString('id-ID')}
+            </div>
+            <p className="text-sm text-muted-foreground">Nilai Retur (Rp)</p>
           </CardContent>
         </Card>
         <Card>

@@ -357,10 +357,158 @@ export interface OfflineDB {
 - `app/inventory/page.tsx`
 - `components/inventory/*`
 - `lib/services/transactionService.ts`
+#### 📋 **DETAILED INVENTORY SUB-MODULE PERMISSIONS**
+
+##### 3.1 Stock Opname (Stock Taking) Sub-Module  
+**Permissions:** `inventory.stock_opname.*`
+- **Read:** Lihat daftar stock opname, hasil hitungan fisik, variance report
+- **Create:** Buat sesi stock opname baru, planning hitungan fisik
+- **Update:** Input hasil hitungan fisik, update variance, edit details
+- **Delete:** Hapus atau cancel sesi stock opname
+- **Approve:** Approve/reject hasil stock opname, apply stock adjustments
+- **Full:** Semua akses stock opname
+
+##### 3.2 Buang Stok (Stock Disposal/Waste) Sub-Module
+**Permissions:** `inventory.stock_waste.*` 
+- **Read:** Lihat daftar disposal/stock yang dibuang, waste history report
+- **Create:** Buat disposal request, catat stock expired/rusak/hilang
+- **Update:** Edit disposal details, update waste quantities, modify reasons
+- **Delete:** Hapus disposal entry, cancel disposal request
+- **Approve:** Approve disposal request, finalize waste transactions
+- **Full:** Semua akses stock waste/disposal
+
+##### 3.3 Purchase Invoice Sub-Module
+**Permissions:** `inventory.purchase_invoice.*`
+- **Read:** Lihat daftar purchase invoice, detail supplier invoice
+- **Create:** Tambah purchase invoice baru dari supplier
+- **Update:** Edit invoice details, update received quantities, modify prices
+- **Delete:** Hapus atau cancel purchase invoice
+- **Approve:** Approve invoice untuk payment, finalize purchase
+- **Full:** Semua akses purchase invoice
+
+##### 3.4 Stock Movement & Adjustment
+**Permissions:** `inventory.stock_movement.*`
+- **Read:** Lihat history stock movement, audit trail, stock transfer log
+- **Create:** Manual stock adjustments, transfer antar lokasi, stock corrections
+- **Update:** Adjust stock levels, update stock locations, modify movement details
+- **Delete:** Remove stock movement records (with approval)
+- **Full:** Semua akses stock movement
+
+#### 🎯 **Granular Permission Examples:**
+
+**Inventory Staff (Read + Update Specific):**
+```
+inventory.stock_opname.read ✅        - Bisa lihat progress stock opname
+inventory.stock_opname.create ❌      - Tidak bisa buat sesi baru
+inventory.stock_opname.update ✅      - Bisa input hasil hitungan
+inventory.stock_opname.approve ❌     - Tidak bisa approve final
+
+inventory.stock_waste.read ✅         - Bisa lihat waste reports
+inventory.stock_waste.create ❌       - Tidak bisa buat disposal
+inventory.stock_waste.approve ❌      - Tidak bisa approve disposal
+
+inventory.stock_movement.read ✅      - Bisa lihat movement history
+inventory.stock_movement.update ✅    - Bisa adjust stock (manual)
+```
+
+**Inventory Supervisor (Create + Update):**
+```
+inventory.purchase_invoice.create ✅  - Bisa buat invoice baru
+inventory.stock_opname.create ✅      - Bisa mulai sesi stock opname
+inventory.stock_opname.update ✅      - Bisa update variance results
+inventory.stock_waste.create ✅       - Bisa buat disposal request
+inventory.stock_waste.approve ❌      - Tidak bisa final approve
+```
+
+**Inventory Manager (Full Control):**
+```
+inventory.stock_opname.approve ✅     - Bisa approve final hasil
+inventory.stock_waste.approve ✅      - Bisa approve disposal
+inventory.purchase_invoice.approve ✅ - Bisa approve untuk payment
+inventory.stock_movement.delete ✅    - Bisa hapus movement records
+```
+
+**File Tambahan yang Terdampak:**
+- `lib/services/stockOpnameService.ts`
+- `lib/services/stockWasteService.ts` 
+- `lib/services/purchaseInvoiceService.ts`
+- `lib/services/stockMovementService.ts`
 
 ### 4. Customers Module
 **Permissions:** `customers.*`
 - **Read:** `/customers` - Lihat daftar customer
+### Skenario 4: Staff Gudang dengan Inventory Focus (R, R, U, R, R)
+**Permission:** Read + Update specific inventory modules
+```
+✅ Halaman: /inventory
+❌ Halaman: /cashier, /products, /customers, /reports, /settings
+✅ Fitur Inventory: 
+   - View stock list, stock movement history
+   - Input hasil stock opname (read + create + update)
+   - View waste/disposal reports (read only)
+   - Manual stock adjustments (update stock movement)
+❌ Fitur Inventory: 
+   - Create purchase invoice (permission denied)
+   - Approve stock opname results (permission denied)
+   - Create disposal requests (permission denied)
+   - Approve waste transactions (permission denied)
+```
+
+### Skenario 5: Supervisor Gudang dengan Approval Rights (C, R, U, R, R)  
+**Permission:** Create + Read + Update + specific approvals
+```
+✅ Halaman: /inventory
+❌ Halaman: /cashier, /products, /customers, /reports, /settings
+✅ Fitur Inventory:
+   - Create purchase invoice baru
+   - Start & manage stock opname sessions
+   - Input & update hasil stock opname
+   - Create disposal/waste requests
+   - View semua inventory reports
+❌ Fitur Inventory:
+   - Approve final stock opname (need manager approval)
+   - Approve disposal requests (need manager approval)  
+   - Finalize purchase invoices (need manager approval)
+   - Delete inventory records (restricted)
+```
+
+### Skenario 6: Manager Gudang dengan Full Control (Full Inventory)
+**Permission:** Full access ke semua inventory sub-modules
+```
+✅ Halaman: /inventory + all sub-pages
+✅ Fitur Inventory: 
+   - Create, Read, Update, Delete all inventory operations
+   - Approve stock opname results & apply adjustments
+   - Approve disposal requests & finalize waste transactions  
+   - Approve purchase invoices for payment
+   - Manual stock movements & corrections
+   - Generate inventory reports & analytics
+   - Configure inventory settings & thresholds
+✅ Advanced Features:
+   - Bulk stock adjustments
+   - Inventory audit & reconciliation
+   - Supplier management & evaluation
+   - Cost analysis & variance reporting
+```
+
+### Skenario 7: Combined Roles - Gudang + Kasir Hybrid
+**Permission:** Mixed access untuk operational flexibility
+```
+✅ Halaman: /cashier, /inventory (limited)
+✅ Cashier Features: 
+   - Standard cashier operations
+   - View product availability
+   - Basic inventory lookup
+✅ Inventory Features (Limited):
+   - View stock levels for sales reference
+   - Request stock replenishments (read + create)
+   - Report damaged goods found during sales
+❌ Restricted Access:
+   - No stock opname management
+   - No purchase invoice creation
+   - No waste/disposal processing
+   - No inventory reports
+```
 - **Create:** Tambah customer baru
 - **Update:** Edit data customer
 - **Delete:** Hapus customer
@@ -460,6 +608,214 @@ export interface UserPermissions {
 ```
 
 ### Component Protection
+#### 📊 **Inventory Sub-Module Offline Support**
+
+##### Stock Opname Offline Operations:
+```typescript
+// Stock Opname Offline Sync Structure
+interface StockOpnameOfflineData {
+  sessions: {
+    id: string;
+    name: string;
+    planned_date: Date;
+    status: 'draft' | 'active' | 'completed' | 'approved';
+    participants: string[];
+    products: {
+      product_id: string;
+      system_quantity: number;
+      physical_count?: number;
+      variance?: number;
+      notes?: string;
+    }[];
+    created_by: string;
+    created_at: Date;
+    offline_created?: boolean;
+    sync_status: 'pending_upload' | 'synced' | 'conflict';
+  };
+  results: {
+    session_id: string;
+    product_id: string;
+    physical_count: number;
+    variance: number;
+    updated_by: string;
+    updated_at: Date;
+    approval_status: 'pending' | 'approved' | 'rejected';
+    offline_updated?: boolean;
+  }[];
+}
+
+// Offline Stock Opname Operations
+const createStockOpnameOffline = async (sessionData: Partial<StockOpnameSession>) => {
+  const newSession = {
+    ...sessionData,
+    id: generateUUID(),
+    status: 'draft',
+    created_at: new Date(),
+    offline_created: true,
+    sync_status: 'pending_upload'
+  };
+  
+  // Store in IndexedDB immediately
+  await indexedDB.add('stock_opname_sessions', newSession);
+  
+  // Queue for sync with high priority (affects inventory accuracy)
+  await syncManager.queueSyncOperation({
+    operation: 'create_stock_opname',
+    data: newSession,
+    priority: 'high',
+    module: 'inventory.stock_opname',
+    conflictResolution: 'user_decision'
+  });
+};
+
+const updatePhysicalCountOffline = async (sessionId: string, productId: string, count: number) => {
+  const variance = count - await getSystemQuantity(productId);
+  
+  // Update immediately for UI responsiveness
+  await indexedDB.update('stock_opname_sessions', sessionId, {
+    products: [
+      {
+        product_id: productId,
+        physical_count: count,
+        variance: variance,
+        updated_at: new Date()
+      }
+    ]
+  });
+  
+  // Queue variance update
+  await syncManager.queueSyncOperation({
+    operation: 'update_physical_count',
+    sessionId,
+    productId,
+    variance,
+    priority: 'high',
+    module: 'inventory.stock_opname'
+  });
+};
+```
+
+##### Stock Waste/Disposal Offline Operations:
+```typescript
+// Stock Waste Offline Sync Structure  
+interface StockWasteOfflineData {
+  disposal_requests: {
+    id: string;
+    request_type: 'expired' | 'damaged' | 'lost' | 'stolen' | 'other';
+    product_id: string;
+    quantity: number;
+    reason: string;
+    estimated_value?: number;
+    photos?: string[]; // Base64 encoded images
+    requested_by: string;
+    status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'processed';
+    created_at: Date;
+    approved_by?: string;
+    approved_at?: Date;
+    offline_created?: boolean;
+    sync_status: 'pending_upload' | 'synced' | 'conflict';
+  };
+  waste_history: {
+    request_id: string;
+    disposal_date: Date;
+    disposed_quantity: number;
+    disposed_by: string;
+    final_notes?: string;
+    sync_status: string;
+  }[];
+}
+
+// Offline Disposal Operations
+const createDisposalRequestOffline = async (requestData: DisposalRequestData) => {
+  const newRequest = {
+    ...requestData,
+    id: generateUUID(),
+    status: 'draft',
+    created_at: new Date(),
+    offline_created: true,
+    sync_status: 'pending_upload'
+  };
+  
+  // Store in IndexedDB
+  await indexedDB.add('disposal_requests', newRequest);
+  
+  // Queue for sync (high priority - affects inventory accuracy)
+  await syncManager.queueSyncOperation({
+    operation: 'create_disposal_request',
+    data: newRequest,
+    priority: 'high',
+    module: 'inventory.stock_waste',
+    conflictResolution: 'user_decision'
+  });
+  
+  return newRequest;
+};
+
+const approveDisposalOffline = async (requestId: string, approvedBy: string, notes?: string) => {
+  // Update local status immediately
+  await indexedDB.update('disposal_requests', requestId, {
+    status: 'approved',
+    approved_by: approvedBy,
+    approved_at: new Date(),
+    final_notes: notes,
+    offline_updated: true
+  });
+  
+  // Queue approval for sync
+  await syncManager.queueSyncOperation({
+    operation: 'approve_disposal',
+    requestId,
+    approvedBy,
+    notes,
+    priority: 'critical',
+    module: 'inventory.stock_waste'
+  });
+  
+  // Auto-update inventory levels when disposal approved
+  const approvedRequest = await indexedDB.get('disposal_requests', requestId);
+  if (approvedRequest) {
+    await updateStockLevelOffline(
+      approvedRequest.product_id,
+      -approvedRequest.quantity,
+      `Disposal approved: ${approvedRequest.reason}`
+    );
+  }
+};
+```
+
+##### Inventory Sync Priority Management:
+```typescript
+// Inventory-specific sync priorities
+const inventorySyncPriorities = {
+  'stock_opname.create': 'high',        // Critical for inventory accuracy
+  'stock_opname.update': 'high',        // Variance tracking
+  'stock_opname.approve': 'critical',   // Final inventory adjustments
+  'stock_waste.create': 'high',         // Waste tracking
+  'stock_waste.approve': 'critical',    // Final disposal processing
+  'purchase_invoice.create': 'medium',  // Stock inbound
+  'stock_movement.create': 'medium',    // Manual adjustments
+  'stock_movement.delete': 'low'        // Cleanup operations
+};
+
+// Enhanced offline notification for inventory
+const getInventorySyncNotification = () => {
+  const pendingInventoryOps = syncManager.getPendingOperations()
+    .filter(op => op.module?.startsWith('inventory.'));
+    
+  const criticalCount = pendingInventoryOps.filter(op => 
+    inventorySyncPriorities[op.operation] === 'critical'
+  ).length;
+  
+  return {
+    hasCriticalUpdates: criticalCount > 0,
+    criticalCount,
+    totalPending: pendingInventoryOps.length,
+    message: criticalCount > 0 ? 
+      `${criticalCount} critical inventory updates need sync` :
+      `${pendingInventoryOps.length} inventory changes pending sync`
+  };
+};
+```
 ```typescript
 // components/PermissionGuard.tsx
 interface PermissionGuardProps {
@@ -551,6 +907,162 @@ const updateAccessTemplateOffline = async (templateId: string, permissions: Perm
 
 #### Employee Data Caching:
 ```typescript
+#### 📋 **Inventory Sub-Module Integration with Universal Sync Framework**
+
+##### Extended Sync Providers untuk Inventory:
+```typescript
+// Inventory-specific sync implementations
+class StockOpnameSyncProvider implements BaseSyncable<StockOpnameSession> {
+  async queueSync(operation: SyncOperation<StockOpnameSession>): Promise<void> {
+    await this.offlineDB.add('sync_queue', {
+      ...operation,
+      module: 'inventory.stock_opname',
+      priority: this.calculateStockOpnamePriority(operation.data)
+    });
+  }
+  
+  private calculateStockOpnamePriority(session: StockOpnameSession): SyncPriority {
+    // Critical: Stock opname approval affects inventory accuracy
+    if (session.status === 'approved') return 'critical';
+    
+    // High: Active stock opname sessions need real-time updates
+    if (session.status === 'active') return 'high';
+    
+    // Medium: Draft sessions
+    return 'medium';
+  }
+  
+  async resolveConflicts(local: StockOpnameSession[], remote: StockOpnameSession[]): Promise<ConflictResolution> {
+    // Stock opname conflicts require careful resolution
+    // Priority: Approved status > Latest update timestamp > User decision
+    return this.priorityBasedResolution(local, remote, ['approved', 'active', 'draft']);
+  }
+}
+
+class StockWasteSyncProvider implements BaseSyncable<DisposalRequest> {
+  async queueSync(operation: SyncOperation<DisposalRequest>): Promise<void> {
+    await this.offlineDB.add('sync_queue', {
+      ...operation,
+      module: 'inventory.stock_waste',
+      priority: this.calculateWastePriority(operation.data)
+    });
+  }
+  
+  private calculateWastePriority(request: DisposalRequest): SyncPriority {
+    // Critical: Approved disposal affects inventory levels immediately
+    if (request.status === 'approved') return 'critical';
+    
+    // High: Pending approvals need quick processing
+    if (request.status === 'pending_approval') return 'high';
+    
+    // Medium: Draft requests
+    return 'medium';
+  }
+  
+  async resolveConflicts(local: DisposalRequest[], remote: DisposalRequest[]): Promise<ConflictResolution> {
+    // Disposal conflicts: approval status takes precedence
+    const approvedLocal = local.filter(r => r.status === 'approved');
+    const approvedRemote = remote.filter(r => r.status === 'approved');
+    
+    if (approvedLocal.length > 0 && approvedRemote.length > 0) {
+      return { strategy: 'user_decision', reason: 'Conflicting approved disposals' };
+    }
+    
+    return { strategy: 'last_write_wins' };
+  }
+}
+```
+
+##### Registered Inventory Sync Providers:
+```typescript
+// Enhanced Universal Sync Manager dengan Inventory Support
+const syncManager = new UniversalSyncManager();
+
+// Register existing providers
+syncManager.registerSyncProvider('access', new AccessSyncProvider());
+syncManager.registerSyncProvider('transactions', new TransactionSyncProvider());
+syncManager.registerSyncProvider('products', new ProductSyncProvider());
+
+// Register new Inventory sub-module providers
+syncManager.registerSyncProvider('inventory.stock_opname', new StockOpnameSyncProvider());
+syncManager.registerSyncProvider('inventory.stock_waste', new StockWasteSyncProvider());
+syncManager.registerSyncProvider('inventory.purchase_invoice', new PurchaseInvoiceSyncProvider());
+syncManager.registerSyncProvider('inventory.stock_movement', new StockMovementSyncProvider());
+```
+
+##### Cross-Module Inventory Data Integrity:
+```typescript
+// Validate inventory consistency across modules
+const validateInventoryConsistency = async () => {
+  const orphanStockOpnameResults = await this.findOrphanStockOpnameResults();
+  const inconsistentWasteDisposals = await this.validateWasteDisposalConsistency();
+  const stalePurchaseInvoices = await this.validatePurchaseInvoiceStatus();
+  
+  // Auto-repair where possible
+  await this.repairStockOpnameVariances(orphanStockOpnameResults);
+  await this.syncWasteWithStockLevels(inconsistentWasteDisposals);
+  await this.finalizeOrphanedPurchaseInvoices(stalePurchaseInvoices);
+};
+
+// Inventory-specific conflict resolution
+const handleInventoryConflict = async (localData: any, remoteData: any, module: string): Promise<Resolution> => {
+  switch (module) {
+    case 'inventory.stock_opname':
+      // Stock opname conflicts: approval status is critical
+      if (localData.status === 'approved' || remoteData.status === 'approved') {
+        return { strategy: 'approved_wins', data: [localData, remoteData].find(d => d.status === 'approved') };
+      }
+      return { strategy: 'latest_timestamp', data: localData.updated_at > remoteData.updated_at ? localData : remoteData };
+      
+    case 'inventory.stock_waste':
+      // Waste disposal: approved disposals affect inventory levels
+      if (localData.status === 'approved' && remoteData.status !== 'approved') {
+        return { strategy: 'approved_wins', data: localData };
+      }
+      return { strategy: 'user_decision', reason: 'Conflicting disposal approval status' };
+      
+    default:
+      return { strategy: 'last_write_wins' };
+  }
+};
+```
+
+##### 🎯 **Benefits untuk Inventory Management:**
+
+✅ **Granular Permission Control** - Setiap sub-module memiliki permission独立的  
+✅ **Hierarchical Approval Workflow** - Staff → Supervisor → Manager approval chain  
+✅ **Real-time Inventory Accuracy** - Critical operations sync immediately  
+✅ **Audit Trail完整性** - Semua perubahan tracked dengan timestamps  
+✅ **Conflict Resolution Khusus** - Inventory-specific conflict handling  
+✅ **Cross-Module Data Integrity** - Validasi konsistensi antar modul  
+✅ **Performance Optimized** - Prioritas sync berdasarkan impact ke inventory  
+
+##### 📊 **Offline Inventory Workflow:**
+
+1. **Stock Opname Process (Offline-First)**:
+   ```
+   Staff creates session offline → Queue for sync
+   Physical counting offline → Immediate local update
+   Variance calculation offline → Background sync
+   Manager approval online → Real-time inventory adjustment
+   ```
+
+2. **Waste Disposal Process (Offline-First)**:
+   ```
+   Staff reports waste offline → Photo capture offline
+   Request creation offline → Sync when online
+   Manager approval online → Immediate stock deduction
+   History tracking online/offline → Complete audit trail
+   ```
+
+3. **Purchase Invoice Process (Hybrid)**:
+   ```
+   Supplier invoice creation → Real-time sync (if online)
+   Quantity updates offline → Queue for sync
+   Approval workflow → Online required
+   Inventory update → Immediate when approved
+   ```
+
 // All employee data cached for offline team management
 interface CachedEmployeeData {
   id: string;

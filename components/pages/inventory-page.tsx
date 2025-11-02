@@ -11,6 +11,7 @@ import StockWasteHistory from "@/components/inventory/stock-waste-history"
 import StockMovementTracker from "@/components/inventory/stock-movement-tracker"
 import SupplierList from "@/components/inventory/supplier-list"
 import InvoiceDetails from "@/components/inventory/invoice-details"
+import StockReturnTab from "@/components/inventory/stock-return-tab"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -52,13 +53,14 @@ export default function InventoryPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full max-w-6xl grid-cols-6">
+          <TabsList className="grid w-full max-w-6xl grid-cols-7">
             <TabsTrigger value="stock">Stok</TabsTrigger>
             <TabsTrigger value="invoices">Faktur Pembelian</TabsTrigger>
             <TabsTrigger value="opname">Stok Opname</TabsTrigger>
             <TabsTrigger value="waste">Buang Stok</TabsTrigger>
             <TabsTrigger value="movements">Pergerakan Stok</TabsTrigger>
             <TabsTrigger value="suppliers">Pemasok</TabsTrigger>
+            <TabsTrigger value="returns">Retur Stok</TabsTrigger>
           </TabsList>
 
           {/* Stock Tab */}
@@ -109,6 +111,11 @@ export default function InventoryPage() {
           {/* Suppliers Tab */}
           <TabsContent value="suppliers" className="space-y-4">
             <SupplierList />
+          </TabsContent>
+
+          {/* Stock Returns Tab */}
+          <TabsContent value="returns" className="space-y-4">
+            <StockReturnTab />
           </TabsContent>
         </Tabs>
       </div>

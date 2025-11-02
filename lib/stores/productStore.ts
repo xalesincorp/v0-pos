@@ -1,12 +1,15 @@
 import { create } from 'zustand';
-import { db, Product, Category, Supplier, Invoice, StockOpname, StockWaste } from '../db';
+import { db, Product, Category, Supplier, Invoice, StockOpname, StockWaste, StockReturn, StockReturnItem } from '../db';
 import { useShiftStore } from './shiftStore';
+import { StockReturnService, CreateStockReturnData } from '../services/stockReturnService';
+import { StockReturnValidationService } from '../services/stockReturnValidationService';
 
 interface ProductState {
   products: Product[];
   categories: Category[];
   suppliers: Supplier[];
   invoices: Invoice[];
+  stockReturns: (StockReturn & { items: StockReturnItem[] })[];
   loading: boolean;
   error: string | null;
   
@@ -14,6 +17,7 @@ interface ProductState {
   fetchCategories: () => Promise<void>;
   fetchSuppliers: () => Promise<void>;
   fetchInvoices: () => Promise<void>;
+  fetchStockReturns: () => Promise<void>;
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
@@ -25,6 +29,7 @@ interface ProductState {
   initializeProducts: () => Promise<void>;
   
   // Inventory management functions
+  updateInvoicePayment: (invoiceId: string, additionalPaidAmount: number, paymentDate?: Date) => Promise<void>;
   addPurchaseInvoice: (invoice: Omit<Invoice, 'id' | 'invoiceNumber' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'shiftId'>) => Promise<void>;
   updateStock: (productId: string, quantity: number, unit: string) => Promise<void>;
   addStockOpname: (opname: Omit<StockOpname, 'id' | 'createdAt' | 'shiftId'>) => Promise<void>;
@@ -32,6 +37,14 @@ interface ProductState {
   calculateHPP: (productId: string) => Promise<number>;
   getStockHistory: (productId: string) => Promise<any[]>;
   getLowStockProducts: () => Product[];
+  
+  // Stock return functions
+  createStockReturn: (data: CreateStockReturnData, createdBy: string) => Promise<string>;
+  updateReturnStatus: (returnId: string, status: 'belum_selesai' | 'selesai', confirmationDate?: Date) => Promise<void>;
+  deleteStockReturn: (returnId: string) => Promise<void>;
+  validateReturnData: (data: any) => Promise<any>;
+  getStockReturnsBySupplier: (supplierId: string) => Promise<(StockReturn & { items: StockReturnItem[] })[]>;
+  getReturnStatistics: (supplierId?: string) => Promise<any>;
   
   // Recipe builder functions
   addRecipe: (recipeProduct: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>) => Promise<void>;
@@ -51,6 +64,7 @@ export const useProductStore = create<ProductState>((set, get) => ({
   categories: [],
   suppliers: [],
   invoices: [],
+  stockReturns: [],
   loading: false,
   error: null,
   
@@ -278,6 +292,46 @@ export const useProductStore = create<ProductState>((set, get) => ({
   },
   
   // Inventory management functions
+  updateInvoicePayment: async (invoiceId, additionalPaidAmount, paymentDate = new Date()) => {
+    set({ loading: true, error: null });
+    try {
+      const invoice = await db.invoices.get(invoiceId);
+      if (!invoice) {
+        throw new Error("Invoice not found");
+      }
+
+      // Calculate new payment amounts
+      const newPaidAmount = (invoice.paidAmount || 0) + additionalPaidAmount;
+      const newRemainingDebt = Math.max(0, invoice.total - newPaidAmount);
+      
+      // Determine new payment status
+      let newPaymentStatus = invoice.paymentStatus;
+      if (newPaidAmount === 0) {
+        newPaymentStatus = "belum_lunas";
+      } else if (newPaidAmount < invoice.total) {
+        newPaymentStatus = "bayar_sebagian";
+      } else {
+        newPaymentStatus = "lunas";
+      }
+
+      // Update the invoice with new payment information
+      await db.invoices.update(invoiceId, {
+        paidAmount: newPaidAmount,
+        remainingDebt: newRemainingDebt,
+        paymentStatus: newPaymentStatus,
+        paymentDate: paymentDate,
+        updatedAt: new Date()
+      });
+
+      // Refresh invoices after update
+      const updatedInvoices = await db.invoices.filter(i => !i.deletedAt).toArray();
+      set({ invoices: updatedInvoices, loading: false });
+    } catch (error: any) {
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+
   addPurchaseInvoice: async (invoiceData) => {
     set({ loading: true, error: null });
     try {
@@ -636,5 +690,124 @@ export const useProductStore = create<ProductState>((set, get) => ({
        (supplier.phone && supplier.phone.toLowerCase().includes(lowerQuery)) ||
        (supplier.address && supplier.address.toLowerCase().includes(lowerQuery)))
     );
+  },
+  
+  // Stock return functions
+  fetchStockReturns: async () => {
+    set({ loading: true, error: null });
+    try {
+      const returns = await StockReturnService.getStockReturns();
+      set({ stockReturns: returns, loading: false });
+    } catch (error: any) {
+      set({ error: error.message, loading: false });
+    }
+  },
+  
+  createStockReturn: async (data: CreateStockReturnData, createdBy: string) => {
+    set({ loading: true, error: null });
+    try {
+      // Transform CreateStockReturnData to ReturnValidationData for validation
+      const validationData: import('../services/stockReturnValidationService').ReturnValidationData = {
+        supplierId: data.supplierId,
+        originalInvoiceId: data.originalInvoiceId,
+        returnItems: data.items.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice
+        })),
+        notes: data.notes || undefined
+      };
+
+      // Validate return data before creating
+      const validation = await StockReturnValidationService.validateReturnData(validationData);
+      if (!validation.isValid) {
+        throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
+      }
+      
+      // Create the stock return
+      const returnId = await StockReturnService.createStockReturn(data, createdBy);
+      
+      // Refresh stock returns
+      const updatedReturns = await StockReturnService.getStockReturns();
+      set({ stockReturns: updatedReturns, loading: false });
+      
+      // Refresh products (stock may have changed)
+      await get().fetchProducts();
+      
+      return returnId;
+    } catch (error: any) {
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+  
+  updateReturnStatus: async (returnId: string, status: 'belum_selesai' | 'selesai', confirmationDate?: Date) => {
+    set({ loading: true, error: null });
+    try {
+      await StockReturnService.updateReturnStatus(returnId, status, confirmationDate);
+      
+      // Refresh stock returns
+      const updatedReturns = await StockReturnService.getStockReturns();
+      set({ stockReturns: updatedReturns, loading: false });
+    } catch (error: any) {
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+  
+  deleteStockReturn: async (returnId: string) => {
+    set({ loading: true, error: null });
+    try {
+      await StockReturnService.deleteStockReturn(returnId);
+      
+      // Refresh stock returns
+      const updatedReturns = await StockReturnService.getStockReturns();
+      set({ stockReturns: updatedReturns, loading: false });
+      
+      // Refresh products (stock may need to be reverted)
+      await get().fetchProducts();
+    } catch (error: any) {
+      set({ error: error.message, loading: false });
+      throw error;
+    }
+  },
+  
+  validateReturnData: async (data: any) => {
+    try {
+      const validation = await StockReturnValidationService.validateReturnData(data);
+      return validation;
+    } catch (error: any) {
+      console.error('Error validating return data:', error);
+      return {
+        isValid: false,
+        errors: ['Validation system error occurred'],
+        warnings: []
+      };
+    }
+  },
+  
+  getStockReturnsBySupplier: async (supplierId: string) => {
+    try {
+      const returns = await StockReturnService.getStockReturnsBySupplier(supplierId);
+      return returns;
+    } catch (error: any) {
+      console.error('Error fetching stock returns by supplier:', error);
+      return [];
+    }
+  },
+  
+  getReturnStatistics: async (supplierId?: string) => {
+    try {
+      const stats = await StockReturnService.getReturnStatistics(supplierId);
+      return stats;
+    } catch (error: any) {
+      console.error('Error fetching return statistics:', error);
+      return {
+        totalReturns: 0,
+        totalAmount: 0,
+        pendingReturns: 0,
+        completedReturns: 0
+      };
+    }
   }
 }));

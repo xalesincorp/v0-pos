@@ -4,7 +4,7 @@ import { id as idLocale } from 'date-fns/locale';
 
 export interface StockMovement {
   id: string;
-  type: 'purchase' | 'sale' | 'opname' | 'waste' | 'adjustment';
+  type: 'purchase' | 'sale' | 'opname' | 'waste' | 'adjustment' | 'return';
   productId: string;
   productName: string;
   productSku: string | null;
@@ -15,7 +15,7 @@ export interface StockMovement {
   totalValue: number;
   reason?: string;
   referenceId: string;
-  referenceType: 'invoice' | 'transaction' | 'opname' | 'waste';
+  referenceType: 'invoice' | 'transaction' | 'opname' | 'waste' | 'stock_return';
   createdAt: Date;
   createdBy: string;
   createdByName?: string;
@@ -77,6 +77,10 @@ class StockHistoryService {
       // Get sale movements (from transactions)
       const saleMovements = await this.getSaleMovements(productId, filter);
       movements.push(...saleMovements);
+
+      // Get return movements
+      const returnMovements = await this.getReturnMovements(productId, filter);
+      movements.push(...returnMovements);
 
       // Sort by date (newest first)
       return movements.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -295,6 +299,66 @@ class StockHistoryService {
       return movements;
     } catch (error) {
       console.error('Error getting sale movements:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get return movements from stock returns
+   */
+  private async getReturnMovements(productId: string, filter?: StockMovementFilter): Promise<StockMovement[]> {
+    try {
+      const stockReturns = await db.stockReturns
+        .filter(stockReturn => {
+          // Filter by date
+          if (filter?.startDate && stockReturn.createdAt < filter.startDate) return false;
+          if (filter?.endDate && stockReturn.createdAt > filter.endDate) return false;
+          
+          // Filter by specific return
+          if (filter?.referenceId && stockReturn.id !== filter.referenceId) return false;
+          
+          return true;
+        })
+        .toArray();
+
+      const movements: StockMovement[] = [];
+      
+      for (const stockReturn of stockReturns) {
+        // Get return items for this product
+        const returnItems = await db.stockReturnItems.where('stockReturnId').equals(stockReturn.id).toArray();
+        
+        for (const returnItem of returnItems) {
+          if (returnItem.productId === productId) {
+            const product = await db.products.get(productId);
+            if (!product) continue;
+
+            // Calculate previous stock (stock before return)
+            const previousStock = (product.currentStock || 0) + returnItem.quantity;
+
+            movements.push({
+              id: `${stockReturn.id}-${returnItem.productId}`,
+              type: 'return',
+              productId,
+              productName: product.name,
+              productSku: product.sku,
+              quantity: -returnItem.quantity, // Negative for returns (stock out)
+              previousStock,
+              newStock: (product.currentStock || 0),
+              unitCost: returnItem.unitPrice,
+              totalValue: returnItem.totalPrice,
+              reason: `Retur dari faktur ${stockReturn.id}`,
+              referenceId: stockReturn.id,
+              referenceType: 'stock_return',
+              createdAt: stockReturn.createdAt,
+              createdBy: stockReturn.createdBy,
+            });
+          }
+        }
+      }
+
+      return movements;
+    } catch (error) {
+      console.error('Error getting return movements:', error);
       return [];
     }
   }
