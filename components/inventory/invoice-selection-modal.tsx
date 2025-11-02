@@ -70,27 +70,27 @@ export default function InvoiceSelectionModal({
 
   // Get payment status badge configuration
   const getPaymentStatusBadge = (status: string, paidAmount?: number, total?: number) => {
+    // Use dynamic calculation if paidAmount and total are provided
+    if (paidAmount !== undefined && total !== undefined) {
+      if (paidAmount === 0) {
+        return { label: "Belum Lunas", className: "bg-red-100 text-red-800 hover:bg-red-100" };
+      } else if (paidAmount < total) {
+        return { label: "Bayar Sebagian", className: "bg-yellow-100 text-yellow-800 hover:bg-yellow-800" };
+      } else {
+        return { label: "Lunas", className: "bg-green-100 text-green-800 hover:bg-green-100" };
+      }
+    }
+    
+    // Fallback to stored status for backward compatibility
     switch (status) {
       case "lunas":
-        return {
-          label: "Lunas",
-          className: "bg-green-100 text-green-800 hover:bg-green-100"
-        };
+        return { label: "Lunas", className: "bg-green-100 text-green-800 hover:bg-green-100" };
       case "belum_lunas":
-        return {
-          label: "Belum Lunas",
-          className: "bg-red-100 text-red-800 hover:bg-red-100"
-        };
+        return { label: "Belum Lunas", className: "bg-red-100 text-red-800 hover:bg-red-100" };
       case "bayar_sebagian":
-        return {
-          label: "Bayar Sebagian",
-          className: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-        };
+        return { label: "Bayar Sebagian", className: "bg-yellow-100 text-yellow-800 hover:bg-yellow-800" };
       default:
-        return {
-          label: status,
-          className: "bg-gray-100 text-gray-800 hover:bg-gray-100"
-        };
+        return { label: status, className: "bg-gray-100 text-gray-800 hover:bg-gray-100" };
     }
   };
 
